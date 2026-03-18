@@ -2,52 +2,57 @@
 
 Build complete, realistic Tableau Next demos end-to-end — no coding required.
 
-You describe the prospect, the persona, and the story. Claude builds the workspace, semantic model, visualizations, and AI-ready metrics automatically in your Salesforce org.
+You describe the prospect, the persona, and the story. Claude builds the workspace, semantic model, visualizations, dashboard, and AI-ready metrics automatically in your Salesforce org.
 
 ---
 
-## Before You Start
+## What You Need
 
-**Software (on your Mac):**
-- [ ] [Claude Code](https://claude.ai/code) installed
-- [ ] Python 3 installed — check by opening Terminal and typing `python3 --version`
-- [ ] The `requests` Python package — install by typing `pip3 install requests` in Terminal
+**On your Mac:**
+- [ ] [Claude Code](https://claude.ai/code) installed (VS Code extension)
+- [ ] Python 3.10+ — check by opening Terminal and typing `python3 --version`
 
-**Salesforce:**
-- [ ] A Salesforce org with Data Cloud enabled
+**In Salesforce:**
+- [ ] A Salesforce org with Data Cloud and Tableau Next provisioned
 - [ ] Admin access (or someone who can create a Connected App for you)
 
 ---
 
-## Step 1 — One-Time Setup
+## One-Time Setup
 
-Open Terminal, then drag this folder into the Terminal window and press Enter to navigate into it. Then run:
+### 1 — Install Python dependencies
 
+```bash
+pip3 install -r requirements.txt
 ```
+
+### 2 — Run the setup script
+
+```bash
 python3 next_setup.py
 ```
 
-The script walks you through everything — including step-by-step instructions for the two things you need to do in the Salesforce UI (creating a Connected App and an IngestAPI connector). Takes about 10–15 minutes.
-
-When it finishes, a file called `next_config.json` will appear in this folder. Keep it private — it contains your credentials. Do not share it.
+The script walks you through creating a Salesforce Connected App and an IngestAPI connector, then saves your credentials to `next_config.json`. Takes about 10–15 minutes the first time.
 
 **You only run setup once per Salesforce org.**
 
+> `next_config.json` contains your credentials — never share it or commit it. It's excluded from this repo by `.gitignore`.
+
+For a detailed step-by-step version (including screenshots and manual credential steps), see [PEER_SETUP.md](PEER_SETUP.md).
+
 ---
 
-## Step 2 — Open This Folder in Claude Code
+## Open This Folder in Claude Code
 
 1. Open VS Code
-2. Go to **File → Open Folder** and select this folder
-3. Click the **Claude Code** icon in the bottom status bar to open the Claude panel
+2. **File → Open Folder** → select this folder
+3. Click the **Claude Code** icon in the bottom status bar
 
-If you don't see the Claude Code icon, install the Claude Code extension from the VS Code Extensions marketplace first.
-
-Once the folder is open, type **hi** in the Claude panel to confirm everything is working — Claude will introduce itself and explain what it can do.
+Type **hi** in the Claude panel to confirm everything is working.
 
 ---
 
-## Step 3 — Build a Demo
+## Build a Demo
 
 Type:
 ```
@@ -59,44 +64,46 @@ Claude will ask for:
 - The persona (e.g., "Commercial Banking Relationship Manager")
 - The story (e.g., "Loan originations have been declining for the past 6 months")
 
-It will show you a plan and ask for your approval before building anything. Once you say go, it handles everything automatically — generating data, loading it into Data Cloud, building the semantic model, and creating the visualizations.
+It shows you a plan and waits for your approval before building anything. Once you say **go**, it handles everything automatically — generating data, loading it into Data Cloud, building the semantic model, and creating the visualizations and dashboard.
 
-The build takes about 5–10 minutes. When it finishes, your demo is live in Salesforce and a demo guide is written to this folder.
+The build takes about 8–15 minutes. You'll get a Mac notification when it's done.
 
 ---
 
 ## What Gets Built
 
 For each demo, Claude creates:
-- **Synthetic data** — realistic financial data with an engineered signal (e.g., a regional decline that started 6 months ago)
-- **Data Cloud schemas and streams** — registers the data structure and loads the data into your Salesforce org automatically
-- A **Workspace** in Tableau Next
-- A **Semantic Data Model** with related tables, calculated metrics, and relationships
-- **Sample visualizations** — a starter set of charts built on the model (you can build more in the UI)
-- **AI-ready metrics** configured for Concierge (the natural language Q&A feature)
-- A **demo guide** with suggested Concierge questions and a run-of-show
+
+| Asset | Where to find it |
+|---|---|
+| Synthetic data loaded into Data Cloud | Data Cloud → Data Explorer |
+| Workspace | Tableau Next → Workspaces |
+| Semantic Data Model | Data 360 → Semantic Models |
+| Visualizations + Dashboard | Tableau Next → Visualizations / Dashboards |
+| Demo guide with Concierge questions | This folder → `{bank}_{use_case}_demo_guide.md` |
 
 ---
 
-## Cleaning Up After a Demo
+## After the Demo — Clean Up
 
-To remove a demo from your org after a meeting:
+To remove a demo from your org:
 
-```
+```bash
 python3 next_teardown.py
 ```
 
-It will show you a list of demos you've built and walk you through the cleanup.
+It lists every demo you've built and walks you through the cleanup.
 
 ---
 
-## Common Issues
+## Troubleshooting
 
-**"ModuleNotFoundError: No module named 'requests'"**
-Run `pip3 install requests` in Terminal and try the setup script again.
-
-**Setup script says port 8080 is already in use**
-Something else on your machine is using that port. Quit other applications (Zoom, local web servers) and try again.
-
-**Something else went wrong**
-Paste the error message into Claude Code and ask what to do. Claude can diagnose and fix most issues automatically.
+| Problem | Fix |
+|---|---|
+| `ModuleNotFoundError` | Run `pip3 install -r requirements.txt` and try again |
+| `Authentication failed` | Check `client_id`, `client_secret`, and `refresh_token` in `next_config.json` |
+| `connector_sf_id not found` | Make sure the connector is named exactly `tableau_next_demo` in Data Cloud Setup |
+| `DLO ACTIVE timeout` | The org is slow — re-run the script; it picks up where it left off |
+| Dashboard is blank | Make sure you said **go** and the script completed Phase 10 |
+| Concierge panel not showing | Enable **Analytics Agent Readiness** in Data 360 → Semantic Model → Settings |
+| Something else went wrong | Paste the error into Claude and ask — it can diagnose and fix most issues |
