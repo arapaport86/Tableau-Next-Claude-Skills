@@ -101,6 +101,63 @@ START_DATE     = date(TODAY.year - 2, TODAY.month, 1)
 
 ---
 
+## MODEL CLONE MODE (optional)
+
+When the user references a retrieved SFDX model folder (e.g., "base the demo on the RLOC model", "use the retrieved model as a template", or provides a path like `"Semantic Models/RLOC Analysis SDM"`), activate clone mode. Use the retrieved JSON files to pre-populate metric design, business preferences, and calc field structure instead of designing from scratch.
+
+### What to read from each file
+
+| File | What to extract | How to use |
+|---|---|---|
+| `model.json` | `businessPreferences` | Clone directly into BUSINESS_PREFERENCES |
+| `metrics.json` | label, description, aggregationType, isCumulative, timeGrains, insightTypes, singularNoun, pluralNoun, sentiment, filters | Clone structure; remap apiNames to demo names |
+| `calculatedMeasurements.json` | aggregationType, dataType, decimalPlace, sentiment, level, description, label | Clone structure; remap expressions to demo field names |
+| `calculatedDimensions.json` | dataType, displayCategory, description, label | Clone structure; remap expressions |
+| `dataObjects.json` | SDO labels, semanticDimensions/semanticMeasurements (label, dataType, description, isVisible) | Use as field design template |
+| `relationships.json` | criteria structure, join field pattern | Clone join pattern |
+
+### Loader function (add to top of script)
+
+```python
+def load_sfdx_model(model_folder: str) -> dict:
+    """Load retrieved SFDX model JSON files as clone template."""
+    p = Path(model_folder)
+    def load(filename):
+        f = p / filename
+        return json.loads(f.read_text()) if f.exists() else {}
+    return {
+        "model":             load("model.json"),
+        "metrics":           load("metrics.json").get("items", []),
+        "calc_measurements": load("calculatedMeasurements.json").get("items", []),
+        "calc_dimensions":   load("calculatedDimensions.json").get("items", []),
+        "data_objects":      load("dataObjects.json").get("items", []),
+        "relationships":     load("relationships.json").get("items", []),
+    }
+
+# Usage: SFDX_MODEL = load_sfdx_model("/path/to/Semantic Models/RLOC Analysis SDM")
+```
+
+### Workflow changes in clone mode
+
+**Step 2 (Design)** — Skip manual metric design. Present the metrics from `metrics.json` as the proposed plan. Ask only: "Which of these do you want to include?" and "What's the demo bank name and signal?"
+
+**Step 3 (Plan)** — Auto-populate the plan table from retrieved metrics. User sees real metric names and structure.
+
+**Business preferences** — Auto-populate from `model.json["businessPreferences"]`. No need to write from scratch.
+
+**Phase 8 (calc fields + metrics)** — Use retrieved structure as template:
+- Metric `insightsSettings`: clone `insightTypes`, `singularNoun`, `pluralNoun`, `sentiment`, `timeGrains`, `filters` directly
+- Calc measurement: clone `aggregationType`, `dataType`, `decimalPlace`, `sentiment`, `level`
+- Relationship: clone join structure with `joinType: "Auto"`
+
+### Field name remapping rule
+
+Retrieved files reference production apiNames (e.g., `Customer_lv`, `fins_comm_bank_dim_customer_Dataverse_CustomerName`). **Never use these in the demo script.** Always remap:
+- Production SDO apiName → demo SDO apiName (from `sdo_api_names` after model creation)
+- Production field apiName → demo field apiName (via `fld()` lookup after Step C)
+
+---
+
 ## CONCIERGE OPTIMIZATION — DESIGN PRINCIPLES
 
 Apply all of these during Steps 2–3. Full API code patterns (field payloads, expression syntax, insight type selection) are in the Implementation Reference section below.
@@ -603,6 +660,64 @@ Full list of 57 pitfalls in the Implementation Reference section below.
 # IMPLEMENTATION REFERENCE
 
 *Confirmed working code. Use this section when writing any API code.*
+
+---
+
+## MODEL CLONE MODE — APPLYING RETRIEVED METRICS IN PHASE 8
+
+When `SFDX_MODEL` is loaded, use this pattern to apply retrieved metric settings instead of hardcoding:
+
+```python
+# Clone insightsSettings from retrieved metric (remapping field refs to demo apiNames)
+def clone_insights_settings(src_metric, identifying_field_ref, dims_refs):
+    """
+    src_metric: one item from SFDX_MODEL["metrics"]
+    identifying_field_ref: demo dim_ref() for the identifying dimension
+    dims_refs: list of demo dim_ref() for additional dimensions
+    """
+    src = src_metric.get("insightsSettings", {})
+    return {
+        "identifyingDimension": {"identifierDimensionReference": identifying_field_ref},
+        "insightTypes": src.get("insightTypes", []),  # clone enabled/disabled flags exactly
+        "insightsDimensionsReferences": dims_refs,
+        "singularNoun": src.get("singularNoun", "dollar"),
+        "pluralNoun":   src.get("pluralNoun", "dollars"),
+        "sentiment":    src.get("sentiment", "SentimentTypeUpIsGood"),
+    }
+
+# Clone metric shell from retrieved metric
+def clone_metric(src_metric, calc_measurement_api_name, date_calc_api_name, additional_dims, insights_settings):
+    """Build a metric payload using retrieved structure."""
+    return {
+        "apiName":     src_metric["apiName"].replace("_mtc", "_mtc"),  # keep suffix convention
+        "label":       src_metric["label"],
+        "description": src_metric.get("description", ""),
+        "measurementReference":   {"calculatedFieldApiName": calc_measurement_api_name},
+        "timeDimensionReference": {"calculatedFieldApiName": date_calc_api_name},
+        "aggregationType":  src_metric.get("aggregationType", "Sum"),
+        "isCumulative":     src_metric.get("isCumulative", False),
+        "timeGrains":       src_metric.get("timeGrains", ["Month", "Quarter", "Year"]),
+        "filters":          src_metric.get("filters", []),
+        "filterLogic":      src_metric.get("filterLogic", ""),
+        "additionalDimensions": additional_dims,
+        "insightsSettings": insights_settings,
+    }
+
+# Apply business preferences from retrieved model
+def apply_business_preferences(model_api_name, sfdx_model, sf_hdrs, base_sem):
+    prefs = sfdx_model["model"].get("businessPreferences", "")
+    if not prefs:
+        return
+    resp = requests.patch(
+        f"{base_sem}/ssot/semantic/models/{model_api_name}",
+        headers=sf_hdrs,
+        json={"businessPreferences": prefs},
+    )
+    if resp.ok:
+        ok("Business preferences cloned from retrieved model")
+    else:
+        info(f"Business preferences (non-fatal): {resp.status_code} {resp.text[:300]}")
+```
 
 ---
 
